@@ -1,0 +1,233 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>한우리 지역센터 좌표 생성</title>
+  <style>
+    :root { --green:#2e8b57; --green-dark:#1f6b41; --bg:#f5f8f5; --line:#dfe7df; --text:#253027; --muted:#68736a; --danger:#c0392b; }
+    * { box-sizing:border-box; }
+    body { margin:0; background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,"Apple SD Gothic Neo","Malgun Gothic",sans-serif; }
+    main { width:min(720px,calc(100% - 32px)); margin:40px auto; }
+    .card { background:#fff; border:1px solid var(--line); border-radius:20px; padding:28px; box-shadow:0 10px 30px rgba(28,62,37,.08); }
+    h1 { margin:0 0 8px; font-size:24px; }
+    .sub { margin:0 0 24px; color:var(--muted); font-size:14px; line-height:1.7; }
+    .step { padding:16px 0; border-top:1px solid var(--line); }
+    .step:first-of-type { border-top:0; }
+    .step strong { display:block; margin-bottom:8px; font-size:15px; }
+    input[type=file] { width:100%; padding:12px; border:1px solid var(--line); border-radius:12px; background:#fafcf9; }
+    .actions { display:flex; gap:10px; margin-top:18px; flex-wrap:wrap; }
+    button { flex:1; min-width:150px; border:0; border-radius:12px; padding:13px 16px; font:inherit; font-weight:700; cursor:pointer; }
+    button.primary { background:var(--green); color:#fff; }
+    button.primary:hover { background:var(--green-dark); }
+    button.secondary { background:#edf3ed; color:var(--green-dark); }
+    button:disabled { opacity:.45; cursor:not-allowed; }
+    .status { margin-top:18px; padding:14px; border-radius:12px; background:#f3f7f3; color:var(--muted); font-size:13px; min-height:48px; white-space:pre-line; }
+    .progress-wrap { display:none; margin-top:16px; }
+    .progress { height:12px; border-radius:999px; background:#e3e9e3; overflow:hidden; }
+    .bar { width:0; height:100%; background:linear-gradient(90deg,var(--green),#5dbb7e); transition:width .2s; }
+    .progress-text { margin-top:7px; color:var(--muted); font-size:12px; text-align:right; }
+    .warn { margin-top:18px; padding:12px 14px; border-radius:10px; background:#fff5e6; color:#8b5a14; font-size:12px; line-height:1.6; }
+    .error { color:var(--danger); }
+  </style>
+</head>
+<body>
+  <main>
+    <div class="card">
+      <h1>한우리 지역센터 좌표 생성</h1>
+      <p class="sub">엑셀 주소를 카카오 좌표로 변환해 거리검색용 JSON을 만듭니다. 엑셀은 브라우저에서만 읽으며 외부 저장소에 업로드되지 않습니다.</p>
+
+      <div class="step">
+        <strong>1. 주소 엑셀 선택</strong>
+        <input id="fileInput" type="file" accept=".xls,.xlsx">
+      </div>
+
+      <div class="step">
+        <strong>2. 좌표 변환 시작</strong>
+        <div class="actions">
+          <button id="startBtn" class="primary" disabled>좌표 생성 시작</button>
+          <button id="downloadBtn" class="secondary" disabled>좌표 JSON 다운로드</button>
+        </div>
+        <div id="progressWrap" class="progress-wrap">
+          <div class="progress"><div id="bar" class="bar"></div></div>
+          <div id="progressText" class="progress-text">0 / 799</div>
+        </div>
+        <div id="status" class="status">엑셀 파일을 선택해주세요.</div>
+      </div>
+
+      <div class="warn">변환 중에는 이 창을 닫지 마세요. 중간 결과는 브라우저에 저장되므로 새로고침 후 같은 엑셀을 다시 선택하면 이어서 진행할 수 있습니다.</div>
+    </div>
+  </main>
+
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <script src="https://dapi.kakao.com/v2/maps/sdk.js?appkey=1db233a522a8b70915e18f3b4b7ff2e8&libraries=services"></script>
+  <script>
+    const EXPECTED_COUNT = 799;
+    const STORAGE_KEY = 'hanuri-geocode-results-v1';
+    const fileInput = document.getElementById('fileInput');
+    const startBtn = document.getElementById('startBtn');
+    const downloadBtn = document.getElementById('downloadBtn');
+    const statusBox = document.getElementById('status');
+    const progressWrap = document.getElementById('progressWrap');
+    const progressText = document.getElementById('progressText');
+    const bar = document.getElementById('bar');
+
+    let centers = [];
+    let results = [];
+    let running = false;
+
+    function cleanPiece(value) {
+      return String(value || '').replace(/\s+/g, ' ').trim().replace(/^[,/]+|[,/]+$/g, '');
+    }
+
+    function buildQueries(address) {
+      const raw = cleanPiece(address);
+      const queries = [];
+      const before = cleanPiece(raw.split('(', 1)[0]);
+      if (before) queries.push(before);
+      const matches = [...raw.matchAll(/\(([^()]*)\)/g)];
+      matches.forEach(match => {
+        const inside = cleanPiece(match[1]);
+        if (inside) queries.push(inside);
+      });
+      if (raw) queries.push(raw);
+      return [...new Set(queries)];
+    }
+
+    function setStatus(message, isError) {
+      statusBox.textContent = message;
+      statusBox.classList.toggle('error', !!isError);
+    }
+
+    function updateProgress(done) {
+      const percent = Math.min(100, (done / EXPECTED_COUNT) * 100);
+      progressWrap.style.display = 'block';
+      progressText.textContent = done + ' / ' + EXPECTED_COUNT;
+      bar.style.width = percent + '%';
+    }
+
+    function saveResults() {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(results));
+    }
+
+    function geocodeQuery(geocoder, query) {
+      return new Promise(resolve => {
+        geocoder.addressSearch(query, function(items, serviceStatus) {
+          if (serviceStatus === kakao.maps.services.Status.OK && items.length) {
+            resolve(items[0]);
+          } else {
+            resolve(null);
+          }
+        });
+      });
+    }
+
+    async function geocodeCenter(geocoder, center) {
+      const queries = buildQueries(center.address);
+      for (let index = 0; index < queries.length; index += 1) {
+        const item = await geocodeQuery(geocoder, queries[index]);
+        if (item) {
+          return {
+            name: center.name,
+            entity: center.entity,
+            lat: Number(item.y),
+            lng: Number(item.x),
+            queryVariant: index
+          };
+        }
+      }
+      return { name:center.name, entity:center.entity, error:'no_result' };
+    }
+
+    async function readWorkbook(file) {
+      if (typeof XLSX === 'undefined') {
+        throw new Error('엑셀 읽기 기능을 불러오지 못했습니다. 인터넷 연결을 확인해주세요.');
+      }
+      const bytes = await file.arrayBuffer();
+      const workbook = XLSX.read(bytes, { type:'array' });
+      const sheet = workbook.Sheets[workbook.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json(sheet, { header:1, defval:'' });
+      const parsed = rows.slice(4).flatMap(row => {
+        const type = cleanPiece(row[1]);
+        const name = cleanPiece(row[3]);
+        const address = cleanPiece(row[4]);
+        if (!name || !address || !['지부','독서교실'].includes(type)) return [];
+        return [{ name, address, entity:type === '지부' ? 'branch' : 'franchise' }];
+      });
+      const unique = new Set(parsed.map(row => row.entity + '|' + row.name));
+      if (parsed.length !== EXPECTED_COUNT || unique.size !== EXPECTED_COUNT) {
+        throw new Error('예상 데이터 799건과 일치하지 않습니다. 올바른 지역센터 주소 엑셀인지 확인해주세요.');
+      }
+      return parsed;
+    }
+
+    fileInput.addEventListener('change', async function() {
+      startBtn.disabled = true;
+      downloadBtn.disabled = true;
+      try {
+        centers = await readWorkbook(fileInput.files[0]);
+        const cached = JSON.parse(localStorage.getItem(STORAGE_KEY) || '[]');
+        const validKeys = new Set(centers.map(row => row.entity + '|' + row.name));
+        results = cached.filter(row => validKeys.has(row.entity + '|' + row.name) && Number.isFinite(row.lat) && Number.isFinite(row.lng));
+        updateProgress(results.length);
+        startBtn.disabled = false;
+        downloadBtn.disabled = results.length === 0;
+        setStatus('주소 ' + centers.length + '건을 확인했습니다.' + (results.length ? '\n저장된 좌표 ' + results.length + '건부터 이어서 진행할 수 있습니다.' : ''));
+      } catch (error) {
+        centers = [];
+        setStatus(error.message, true);
+      }
+    });
+
+    startBtn.addEventListener('click', async function() {
+      if (running || centers.length !== EXPECTED_COUNT) return;
+      if (typeof kakao === 'undefined' || !kakao.maps || !kakao.maps.services) {
+        setStatus('카카오 지도 기능을 불러오지 못했습니다. JavaScript SDK 도메인 등록을 확인해주세요.', true);
+        return;
+      }
+      running = true;
+      startBtn.disabled = true;
+      const geocoder = new kakao.maps.services.Geocoder();
+      const completed = new Set(results.map(row => row.entity + '|' + row.name));
+      const failures = [];
+
+      for (const center of centers) {
+        const key = center.entity + '|' + center.name;
+        if (completed.has(key)) continue;
+        const result = await geocodeCenter(geocoder, center);
+        if (result.error) {
+          failures.push(result);
+        } else {
+          results.push(result);
+          completed.add(key);
+        }
+        if ((results.length + failures.length) % 10 === 0) saveResults();
+        updateProgress(results.length);
+        setStatus('좌표를 생성하고 있습니다.\n성공 ' + results.length + '건 · 실패 ' + failures.length + '건');
+        await new Promise(resolve => setTimeout(resolve, 80));
+      }
+
+      saveResults();
+      running = false;
+      startBtn.disabled = false;
+      downloadBtn.disabled = results.length === 0;
+      const failedNames = failures.map(row => row.name);
+      if (failures.length) {
+        setStatus('좌표 생성 완료\n성공 ' + results.length + '건 · 실패 ' + failures.length + '건\n실패: ' + failedNames.join(', '), true);
+      } else {
+        setStatus('좌표 ' + results.length + '건 생성 완료! 이제 좌표 JSON을 다운로드해주세요.');
+      }
+    });
+
+    downloadBtn.addEventListener('click', function() {
+      const ordered = [...results].sort((a,b) => a.entity.localeCompare(b.entity) || a.name.localeCompare(b.name, 'ko'));
+      const blob = new Blob([JSON.stringify(ordered)], { type:'application/json;charset=utf-8' });
+      const link = document.createElement('a');
+      link.href = URL.createObjectURL(blob);
+      link.download = 'hanuri-geocoded-centers.json';
+      link.click();
+      setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+    });
+  </script>
+</body>
+</html>
