@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>우리동네 한우리 선생님 찾기 - 주소별 맞춤 수업 v11</title>
+<title>우리동네 한우리 선생님 찾기 - 모바일 반응형 v12</title>
 <style>
   :root {
     --brand-green: #2e8b57; --brand-green-dark: #1f6b41; --brand-orange: #f0932b;
@@ -110,11 +110,60 @@
   .legend b.dot.franchise { background:var(--badge-orange-text); }
   .indirect-note { font-size:11px; color:#b8600f; margin-top:4px; }
   .load-more { display:block; width:100%; margin-top:6px; padding:12px; border-radius:10px; border:1.5px dashed var(--border); background:#fff; color:var(--text-mid); font-weight:700; font-size:13px; cursor:pointer; }
+  .step-wrap { padding:0 20px; margin-top:20px; }
+
+  @media (max-width:520px) {
+    body { overflow-x:hidden; }
+    .mockup-note { font-size:11.5px; line-height:1.35; padding:7px 10px; }
+    .page { width:100%; padding-bottom:36px; }
+    header { padding:24px 16px 27px; border-radius:0 0 20px 20px; }
+    header .logo { font-size:12px; }
+    header h1 { font-size:20px; }
+    header p { font-size:13px; }
+    section { padding:20px 16px; }
+    .step-wrap { padding:0 16px; margin-top:16px; }
+    .steps { gap:6px; margin-bottom:14px; }
+    .step-chip { display:flex; align-items:center; justify-content:center; min-height:48px; padding:7px 6px; font-size:11.5px; line-height:1.3; }
+    .filter-card { padding:15px; border-radius:14px; }
+    .option-grid { grid-template-columns:1fr; gap:8px; }
+    .option-grid.two { grid-template-columns:1fr 1fr; }
+    .option { min-height:72px; padding:11px 8px; }
+    .option .emoji { font-size:21px; margin-bottom:4px; }
+    .location-input-wrap { flex-direction:column; }
+    .location-input { width:100%; min-height:46px; padding:11px 12px; }
+    .address-search-btn { width:100%; min-height:44px; padding:10px 14px; }
+    .api-note { line-height:1.45; }
+    .btn-row { gap:7px; margin-top:14px; }
+    .cta-primary, .cta-back { padding:12px 9px; font-size:14px; }
+    .cta-back { flex-basis:76px; }
+    .result-count { line-height:1.55; overflow-wrap:anywhere; }
+    .data-note { line-height:1.5; }
+    .legend { gap:10px; margin-bottom:12px; }
+    .result-group-title { font-size:14.5px; line-height:1.4; word-break:keep-all; }
+    .result-group-sub { line-height:1.55; word-break:keep-all; }
+    .center-card { padding:14px; border-radius:14px; }
+    .center-card h3 { font-size:15px; line-height:1.45; word-break:keep-all; overflow-wrap:anywhere; }
+    .badges { gap:5px; margin-bottom:11px; }
+    .badge { font-size:11px; padding:4px 8px; }
+    .btn-consult { min-height:44px; }
+    .link-row { flex-wrap:wrap; }
+    .link-btn { flex:1 1 calc(50% - 4px); min-height:42px; padding:9px 6px; }
+    .load-more { min-height:44px; }
+    .modal-overlay { padding:16px; }
+    .modal-box { max-width:100%; padding:20px 18px; }
+    .toast { width:calc(100% - 28px); max-width:none; padding:11px 14px; border-radius:14px; text-align:center; white-space:normal; line-height:1.4; }
+  }
+
+  @media (max-width:360px) {
+    .option-grid.two { grid-template-columns:1fr; }
+    .step-chip { min-height:52px; font-size:11px; }
+    .link-btn { flex-basis:100%; }
+  }
 </style>
 </head>
 <body>
 
-<div class="mockup-note">✅ 주소별 맞춤 수업 찾기 v11 — 독서교실·상담센터 안내 개선</div>
+<div class="mockup-note">✅ 모바일 반응형 v12 — 휴대폰 화면·터치 영역 최적화</div>
 
 <div class="page">
   <header>
@@ -123,7 +172,7 @@
     <p>아이에게 맞는 수업 방식을 먼저 골라보세요</p>
   </header>
 
-  <div style="padding:0 20px; margin-top:20px;">
+  <div class="step-wrap">
     <div class="steps">
       <div class="step-chip active" id="chip-1">① 수업 방식 고르기</div>
       <div class="step-chip" id="chip-2">② 우리집 주변 한우리 찾기</div>
