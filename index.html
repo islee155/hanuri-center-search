@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>우리동네 한우리 선생님 찾기 - 주소별 맞춤 수업 v10</title>
+<title>우리동네 한우리 선생님 찾기 - 주소별 맞춤 수업 v11</title>
 <style>
   :root {
     --brand-green: #2e8b57; --brand-green-dark: #1f6b41; --brand-orange: #f0932b;
@@ -114,7 +114,7 @@
 </head>
 <body>
 
-<div class="mockup-note">✅ 주소별 맞춤 수업 찾기 v10 — 상담센터·도보권 독서교실 구분</div>
+<div class="mockup-note">✅ 주소별 맞춤 수업 찾기 v11 — 독서교실·상담센터 안내 개선</div>
 
 <div class="page">
   <header>
@@ -123,16 +123,10 @@
     <p>아이에게 맞는 수업 방식을 먼저 골라보세요</p>
   </header>
 
-  <div class="onboarding-banner" onclick="showToast('가이드 페이지로 이동합니다 (예시 링크)')">
-    <div class="icon">🌱</div>
-    <div class="text"><strong>독서논술이 처음이신가요?</strong><span>수업이 어떻게 진행되는지 1분 만에 알아보기</span></div>
-    <div class="arrow">›</div>
-  </div>
-
   <div style="padding:0 20px; margin-top:20px;">
     <div class="steps">
-      <div class="step-chip active" id="chip-1">① 어디서 수업</div>
-      <div class="step-chip" id="chip-2">② 우리 동네</div>
+      <div class="step-chip active" id="chip-1">① 수업 방식 고르기</div>
+      <div class="step-chip" id="chip-2">② 우리집 주변 한우리 찾기</div>
     </div>
   </div>
 
@@ -190,10 +184,7 @@
     <div id="cardsContainer"></div>
     <div class="empty-state" id="emptyState" style="display:none;">주소를 다시 검색하거나 선택한 수업 형태를 확인해주세요.</div>
     <button class="load-more" id="loadMoreBtn" style="display:none;" onclick="showMore()">더보기</button>
-    <div class="help-box" style="margin-top:8px;">
-      수업 상담센터와 독서교실의 차이가 궁금하신가요?<br>
-      <a onclick="showToast('수업 상담센터/독서교실 안내 페이지로 이동합니다 (예시 링크)')">한우리 수업 방식 3분 안내 보기 →</a>
-    </div>
+    <div id="consultationContainer"></div>
   </section>
 </div>
 
@@ -239,6 +230,7 @@
   const selectedLocations = new Set();
   const selectedSizes = new Set();
   let currentResults = [];
+  let currentConsultationResults = [];
   let shownCount = 0;
   const PAGE_SIZE = 8;
   const MAX_WALK_METERS = 1500;
@@ -326,7 +318,8 @@
   }
 
   function consultationDisplayName(name) {
-    return String(name || '').replace(/지부$/, '') + ' 한우리 상담센터';
+    const branchName = String(name || '');
+    return branchName.replace(/지부$/, '') + ' 한우리 상담센터 (' + branchName + ')';
   }
 
   // 주소 행정정보와 제공된 담당 지역을 우선 비교하고, 같은 조건이면 위치가 가까운 상담센터를 선택합니다.
@@ -395,13 +388,13 @@
     const found = await geocodeAddress(rawInput);
     if (!found) {
       currentResults = [];
+      currentConsultationResults = [];
       document.getElementById('dataNote').style.display = 'none';
       renderResults('선택한 주소의 위치를 확인하지 못했어요. 주소를 다시 선택해주세요.', true);
       showToast('주소 좌표를 찾지 못했습니다.');
       return;
     }
 
-    const wantsBranchEntity = selectedLocations.has('visit') || selectedLocations.has('homeclub');
     const wantsFranchiseEntity = selectedLocations.has('franchise');
 
     const nearbyClassrooms = ENTITY_COORDS
@@ -413,12 +406,12 @@
       .filter(e => e.meters <= MAX_WALK_METERS)
       .sort((a, b) => a.meters - b.meters);
 
-    const needsConsultation = wantsBranchEntity || (wantsFranchiseEntity && nearbyClassrooms.length === 0);
-    const consultationCenter = needsConsultation ? findConsultationCenter(found, nearbyClassrooms) : null;
+    const consultationCenter = findConsultationCenter(found, nearbyClassrooms);
     const consultationResults = consultationCenter ? [consultationCenter] : [];
     const classroomResults = wantsFranchiseEntity ? nearbyClassrooms : [];
 
-    currentResults = consultationResults.concat(classroomResults);
+    currentResults = classroomResults;
+    currentConsultationResults = consultationResults;
     document.getElementById('dataNote').style.display = 'block';
     document.getElementById('dataNote').textContent = classroomResults.length > 0
       ? '📍 독서교실 거리는 입력한 주소와 교실 위치 사이의 직선거리입니다. 실제 도보 경로는 다를 수 있어요. 수업 상담센터는 거리와 관계없이 주소에 맞춰 안내해드려요.'
@@ -430,9 +423,7 @@
     const sizeText = Array.from(selectedSizes).map(s => sizeLabelMap[s]).join('/');
     let resultMessage = '<b>' + rawInput + '</b> 기준 <b>' + locText + ' · ' + sizeText + '</b> 결과예요. ';
     if (wantsFranchiseEntity && classroomResults.length > 0) {
-      resultMessage += wantsBranchEntity
-        ? '우리집 맞춤 수업 상담과, 걸어서 갈 수 있는 거리(1.5km 이내)의 독서교실 <b>' + classroomResults.length + '곳</b>을 함께 보여드려요.'
-        : '걸어서 갈 수 있는 거리(1.5km 이내)의 독서교실 <b>' + classroomResults.length + '곳</b>을 가까운 순으로 찾았어요.';
+      resultMessage += '걸어서 갈 수 있는 거리(1.5km 이내)의 독서교실 <b>' + classroomResults.length + '곳</b>을 가까운 순으로 찾았어요. 수업 상담센터도 아래에서 함께 안내해드려요.';
     } else if (wantsFranchiseEntity) {
       resultMessage += '1.5km 안에 독서교실이 아직 없어, 우리집에서 가능한 다른 수업을 상담센터에서 안내해드릴게요.';
     } else {
@@ -444,12 +435,15 @@
   function renderResults(countHtml, isEmptyMessage) {
     const container = document.getElementById('cardsContainer');
     container.innerHTML = '';
+    document.getElementById('consultationContainer').innerHTML = '';
     shownCount = 0;
     document.getElementById('results-section').style.display = 'block';
     document.getElementById('results-divider').style.display = 'block';
-    document.getElementById('emptyState').style.display = currentResults.length === 0 ? 'block' : 'none';
+    document.getElementById('emptyState').style.display =
+      currentResults.length === 0 && currentConsultationResults.length === 0 ? 'block' : 'none';
     document.getElementById('resultCountText').innerHTML = isEmptyMessage ? countHtml : countHtml;
     showMore();
+    renderConsultation();
     setTimeout(() => document.getElementById('results-section').scrollIntoView({ behavior: 'smooth', block: 'start' }), 60);
   }
 
@@ -459,23 +453,37 @@
     next.forEach((r, index) => {
       const globalIndex = shownCount + index;
       const previous = currentResults[globalIndex - 1];
-      if (!previous || previous.entity !== r.entity) {
+      if (!previous) {
         const heading = document.createElement('div');
-        if (r.entity === 'branch') {
-          heading.innerHTML =
-            '<h3 class="result-group-title">우리 동네 수업 상담센터</h3>' +
-            '<p class="result-group-sub">방문수업·홈클럽(공부방) 등 우리집 주소에서 가능한 수업을 안내해드려요.</p>';
-        } else {
-          heading.innerHTML =
-            '<h3 class="result-group-title">걸어서 갈 수 있는 독서교실</h3>' +
-            '<p class="result-group-sub">우리집에서 직선거리 1.5km 안에 있는 교실만 가까운 순으로 보여드려요.</p>';
-        }
+        heading.innerHTML =
+          '<h3 class="result-group-title">걸어서 갈 수 있는 독서교실</h3>' +
+          '<p class="result-group-sub">한우리 독서교실은 아이가 직접 방문해 수업받는 오프라인 교습공간(교습소)이에요. 우리집에서 직선거리 1.5km 안에 있는 교실을 가까운 순으로 보여드려요.</p>';
         container.appendChild(heading);
       }
       container.appendChild(buildCard(r));
     });
     shownCount += next.length;
     document.getElementById('loadMoreBtn').style.display = shownCount < currentResults.length ? 'block' : 'none';
+  }
+
+  function renderConsultation() {
+    const container = document.getElementById('consultationContainer');
+    container.innerHTML = '';
+    if (!currentConsultationResults.length) return;
+
+    const result = currentConsultationResults[0];
+    const heading = document.createElement('div');
+    if (selectedLocations.has('franchise') && currentResults.length > 0) {
+      heading.innerHTML =
+        '<h3 class="result-group-title">독서교실 선택이 어렵거나 다른 수업도 궁금하세요?</h3>' +
+        '<p class="result-group-sub">' + consultationDisplayName(result.name) + '에서 방문수업·홈클럽과 독서교실 상담을 함께 도와드려요.</p>';
+    } else {
+      heading.innerHTML =
+        '<h3 class="result-group-title">우리 동네 수업 상담센터</h3>' +
+        '<p class="result-group-sub">방문수업·홈클럽(공부방) 등 우리집 주소에서 가능한 수업을 안내해드려요.</p>';
+    }
+    container.appendChild(heading);
+    container.appendChild(buildCard(result));
   }
 
   function buildCard(r) {
@@ -495,8 +503,7 @@
     } else {
       div.innerHTML =
         '<div class="top-row"><div><span class="entity-tag franchise">독서교실</span><h3>' + r.name + '</h3></div></div>' +
-        '<p class="desc">걸어서 갈 수 있는 한우리 독서교실이에요.</p>' +
-        '<div class="badges">' + distBadge + '<span class="badge orange">🏫 독서교실</span><span class="badge green">수업 방식은 상담 시 확인</span></div>' +
+        '<div class="badges">' + distBadge + '<span class="badge orange">🏫 독서교실</span><span class="badge blue">🧑‍🏫 1:1 수업</span><span class="badge green">👧🧒 그룹 수업</span></div>' +
         '<div class="card-actions"><button class="btn-consult" onclick="openConsult(\'' + r.name + '\')">독서교실 상담 신청하기</button>' +
         '<div class="link-row"><button class="link-btn" onclick="callCenter(\'' + r.name + '\')">📞 전화하기</button>' +
         '<button class="link-btn naver" onclick="openExternal(\'네이버플레이스\',\'' + r.name + '\')">N 플레이스</button>' +
